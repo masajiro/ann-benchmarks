@@ -53,6 +53,7 @@ jobs:
           - pgvector
           - pynndescent
           - redisearch
+          - qbg_ngt
           - qdrant
           - qg_ngt
           - qsg_ngt

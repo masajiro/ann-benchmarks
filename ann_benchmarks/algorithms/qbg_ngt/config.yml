@@ -1,0 +1,14 @@
+float:
+  any:
+  - base_args: ['@metric', Float, 0.1]
+    constructor: QBG
+    disabled: false
+    docker_tag: ann-benchmarks-qbg_ngt
+    module: ann_benchmarks.algorithms.qbg_ngt
+    name: NGT-qbg
+    run_groups:
+      base:
+        args: [{"Fs" : 0, "Sc": 10, "Ss": 0, "Tc": 10, "Ts": 0, "er": 0.97,
+              "rs": 1000, "ri": 600, "rx": 10, "be": 0.05}]
+        query_args: [[{"epsilon":0.10, "edge":600, "blob":200},
+                      {"epsilon":0.50, "edge":600, "blob":200}]]
