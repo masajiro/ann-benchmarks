@@ -8,7 +8,15 @@ float:
     name: NGT-qbg
     run_groups:
       base:
-        args: [{"Fs" : 0, "Sc": 10, "Ss": 0, "Tc": 10, "Ts": 0, "er": 0.97,
-              "rs": 1000, "ri": 600, "rx": 10, "be": 0.05}]
-        query_args: [[{"epsilon":0.10, "edge":600, "blob":200},
-                      {"epsilon":0.50, "edge":600, "blob":200}]]
+        args: [{"Fs" : 0, "Sc": 0, "Ss": 0, "Tc": 20000, "Ts": 100000, "er": 0.97,
+                "rs": 2000, "ri": 600, "rx": 10, "be": 0.05}]
+        query_args: [[{"epsilon":0.1, "edge":0, "probe":5, "expansion":3.0},
+                      {"epsilon":0.1, "edge":0, "probe":10, "expansion":3.0},
+                      {"epsilon":0.1, "edge":0, "probe":200, "expansion":3.0},
+                      {"epsilon":0.1, "edge":0, "probe":200, "expansion":5.0},
+                      {"epsilon":0.1, "edge":0, "probe":200, "expansion":10.0},
+                      {"epsilon":0.1, "edge":0, "probe":500, "expansion":20.0},
+                      {"epsilon":0.1, "edge":0, "probe":500, "expansion":40.0},
+                      {"epsilon":0.1, "edge":0, "probe":500, "expansion":50.0}]]
+        #query_args: [[{"epsilon":0.02, "edge":0, "blob":10},
+        #              {"epsilon":0.05, "edge":0, "blob":10}]]

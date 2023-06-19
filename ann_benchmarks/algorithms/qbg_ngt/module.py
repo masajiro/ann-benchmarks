@@ -40,10 +40,11 @@ class QBG(BaseANN):
     #    self._index_path = os.path.join(self._path, DATASETS[dataset]().short_name())
         
     def fit(self, X):
+        subprocess.call("env")
         print("QBG: start indexing...")
         dim = len(X[0])
-        print("QG: # of data=" + str(len(X)))
-        print("QG: dimensionality=" + str(dim))
+        print("QBG: # of data=" + str(len(X)))
+        print("QBG: dimensionality=" + str(dim))
         #index_dir = "indexes"
         index_dir = "results/indexes"
         if dim <= 128:
@@ -128,7 +129,7 @@ class QBG(BaseANN):
                     '-X' + str(self._r_step),
                     '-I' + str(self._num_of_r_iterations),
                     '-A' + str(self._expected_recall),
-                    '-Pr' , '-M1', '-ip', '-S2', '-t600', '-v',
+                    '-Pn' , '-M1', '-ip', '-S2', '-t600', '-v', '-Gz',
                     self._index_path]
             print(args)
             subprocess.call(args)
@@ -153,8 +154,8 @@ class QBG(BaseANN):
         self._num_of_probes = query_args.get("probe", 0)
         self._blob_epsilon = query_args.get("blob_epsilon", self._blob_epsilon)
         # only this part is different between t1 and t2
-        #self._exact_result_expansion = query_args.get("expansion", 2.0)
-        self._exact_result_expansion = 0.0
+        self._exact_result_expansion = query_args.get("expansion", 0.0)
+        #self._exact_result_expansion = 0.0
         #self._function_selector = 4 + 3 #######################
         #self._function_selector = 0 ############################
         self.name = "QBG-NGT(%1.3f, %s, %s, %s, %1.3f, %1.3f)" % (
@@ -175,8 +176,8 @@ class QBG(BaseANN):
                         num_of_probes=self._num_of_probes)
         print(f"QBG: eps={self._epsilon} blobeps={self._blob_epsilon} edge={self._edge_size} blob={self._exploration_size}")
 
-    def query(self, X, n):
-        return self._index.search(X, n)
+    def query(self, v, n):
+        return self._index.search(v, n)
 
     #def __str__(self):
     #    return "NGT-T1:" + self.getTitle() + f"-be{self._blob_epsilon}-e{self._epsilon}-bl{self._exploration_size}-p{self._num_of_probes}"
