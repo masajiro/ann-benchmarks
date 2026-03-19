@@ -1,6 +1,7 @@
 import os
 import subprocess
 import time
+import shutil
 
 import ngtpy
 
@@ -13,6 +14,8 @@ class QG(BaseANN):
         self._edge_size = int(param["edge"])
         self._outdegree = int(param["outdegree"])
         self._indegree = int(param["indegree"])
+        self._outdegree_ext = int(param["outdegreeExt"]) if "outdegreeExt" in param.keys() else 0
+        self._indegree_ext = int(param["indegreeExt"]) if "indegreeExt" in param.keys() else 0
         self._max_edge_size = int(param["max_edge"]) if "max_edge" in param.keys() else 128
         self._metric = metrics[metric]
         self._object_type = object_type
@@ -21,6 +24,11 @@ class QG(BaseANN):
         self._build_time_limit = float(param["timeout"]) if "timeout" in param.keys() else 4
         self._epsilon = float(param["epsilon"]) if "epsilon" in param.keys() else epsilon
         self._sample = int(param["sample"]) if "sample" in param.keys() else 20000
+        self._leaf = param["leaf"] if "leaf" in param.keys() else '100:5'
+        self._seed = param["seed"] if "seed" in param.keys() else 'f36'
+        self._hop = param["hop"] if "hop" in param.keys() else '3:10'
+        self._reconst = param["reconst"] if "reconst" in param.keys() else 'base'
+        self._refine_k = int(param["refine_k"]) if "refine_k" in param.keys() else 0
         print("QG: edge_size=" + str(self._edge_size))
         print("QG: outdegree=" + str(self._outdegree))
         print("QG: indegree=" + str(self._indegree))
@@ -39,6 +47,9 @@ class QG(BaseANN):
             os.makedirs(index_dir)
         index = os.path.join(index_dir, "ONNG-{}-{}-{}".format(self._edge_size, self._outdegree, self._indegree))
         anngIndex = os.path.join(index_dir, "ANNG-" + str(self._edge_size))
+        tempIndex = os.path.join(index_dir, "TEMP-" + str(self._edge_size))
+        forestIndex = os.path.join(index_dir, "FOREST-" + str(self._edge_size))
+        index = forestIndex
         print("QG: index=" + index)
         if (not os.path.exists(index)) and (not os.path.exists(anngIndex)):
             print("QG: create ANNG")
@@ -46,46 +57,111 @@ class QG(BaseANN):
             args = [
                 "ngt",
                 "create",
-                "-it",
                 "-p8",
                 "-b500",
                 "-ga",
-                "-of",
+                "-oauto",
                 "-D" + self._metric,
                 "-d" + str(dim),
                 "-E" + str(self._edge_size),
-                "-S40",
                 "-e" + str(self._epsilon),
-                "-P0",
-                "-B30",
-                "-T" + str(self._build_time_limit),
+                "-rd",
+                "-L" + self._leaf,
+                "-s" + self._seed,
                 anngIndex,
             ]
+            print(" ".join(args))
             subprocess.call(args)
             idx = ngtpy.Index(path=anngIndex)
-            idx.batch_insert(X, num_threads=24, debug=False)
+            idx.batch_insert(X, num_threads=24, build=False, debug=False)
+            idx.save()
+            idx.close()
+            print("QG: build ANNG")
+            idx = ngtpy.Index(path=anngIndex)
+            idx.build_index();
             idx.save()
             idx.close()
             print("QG: ANNG construction time(sec)=" + str(time.time() - t))
+            if self._refine_k >= 0:
+                print("QG: create RANNG")
+                t = time.time()
+                args = [
+                    "ngt",
+                    "refine-anng",
+                    "-e" + str(0.1 if self._refine_k == 0 else self._epsilon),
+                    "-k-" + str(self._refine_k),
+                    anngIndex,
+                    tempIndex,
+                ]
+                print(" ".join(args))
+                subprocess.call(args)
+                shutil.rmtree(anngIndex)
+                os.rename(tempIndex, anngIndex)
+                print("QG: RANNG construction time(sec)=" + str(time.time() - t))
         if not os.path.exists(index):
-            print("QG: degree adjustment")
+            print("QG: construct Forest")
             t = time.time()
             args = [
                 "ngt",
-                "reconstruct-graph",
-                "-mS",
-                "-E " + str(self._outdegree),
-                "-o " + str(self._outdegree),
-                "-i " + str(self._indegree),
+                "construct-forest",
+                "-EH",
+                "-H" + self._hop,
+                "-ms",
+                "-Mg",
+                "-o" + str(self._outdegree),
+                "-i" + str(self._indegree),
+                "-O" + str(self._outdegree_ext),
+                "-I" + str(self._indegree_ext),
+                "-e0.0",
+                forestIndex,
                 anngIndex,
-                index,
             ]
+            print(" ".join(args))
             subprocess.call(args)
+            print("QG: construct Forest time(sec)=" + str(time.time() - t))
+            if self._reconst == "none":
+                print("QG: degree adjustment none")
+            elif self._reconst == "base":
+                print("QG: degree adjustment")
+                t = time.time()
+                args = [
+                    "ngt",
+                    "reconstruct-graph",
+                    "-mS",
+                    "-sp",
+                    forestIndex,
+                    tempIndex,
+                ]
+                print(" ".join(args))
+                subprocess.call(args)
+                shutil.rmtree(forestIndex)
+                os.rename(tempIndex, forestIndex)
+            else:
+                args = [
+                    "ngt",
+                    "reconstruct-graph",
+                    "-mS",
+                    "-sp",
+                    "-Ps",
+                    "-R" + self._reconst,
+                    forestIndex,
+                    tempIndex,
+                ]
+                print(" ".join(args))
+                subprocess.call(args)
+                shutil.rmtree(forestIndex)
+                os.rename(tempIndex, forestIndex)
             print("QG: degree adjustment time(sec)=" + str(time.time() - t))
         if not os.path.exists(index + "/qg"):
             print("QG:create and append...")
             t = time.time()
-            args = ["qbg", "create-qg", index]
+            args = [
+                "qbg",
+                "create-qg",
+                "-R-:u",
+                "-k0",
+                index]
+            print(" ".join(args))
             subprocess.call(args)
             print("QG: create qg time(sec)=" + str(time.time() - t))
             print("QB: build...")
@@ -94,7 +170,7 @@ class QG(BaseANN):
                 "qbg",
                 "build-qg",
                 "-o" + str(self._sample),
-                "-M6",
+                "-M1",
                 "-ib",
                 "-I400",
                 "-Gz",
@@ -102,6 +178,7 @@ class QG(BaseANN):
                 "-E" + str(self._max_edge_size),
                 index,
             ]
+            print(" ".join(args))
             subprocess.call(args)
             print("QG: build qg time(sec)=" + str(time.time() - t))
         if os.path.exists(index + "/qg/grp"):
@@ -119,11 +196,19 @@ class QG(BaseANN):
         result_expansion, epsilon = parameters
         print("QG: result_expansion=" + str(result_expansion))
         print("QG: epsilon=" + str(epsilon))
-        self.name = "QG-NGT(%s, %s, %s, %s, %s, %1.3f)" % (
+        self.name = "QG-NGT(%s,%s,%s:%s,%s:%s,%s,%s,%s,%s,%s,%s,%s,%s)" % (
             self._edge_size,
+            self._epsilon,
             self._outdegree,
             self._indegree,
+            self._outdegree_ext,
+            self._indegree_ext,
             self._max_edge_size,
+            self._sample,
+            self._leaf,
+            self._seed,
+            self._hop,
+            self._refine_k,
             epsilon,
             result_expansion,
         )
